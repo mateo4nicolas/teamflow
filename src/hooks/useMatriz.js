@@ -18,6 +18,8 @@ export function useMatriz() {
   const [allColumns, setAllColumns] = useState([])
   const [departments, setDepartments] = useState([])
   const [matrizColumns, setMatrizColumns] = useState([])
+  const [tablaProductos, setTablaProductos] = useState([]) // [{ cliente_id, mes, checked }]
+  const [clientVisibility, setClientVisibility] = useState([]) // [{ cliente_id, mes, active }]
   const [loading, setLoading] = useState(true)
 
   const fetchAll = useCallback(async () => {
@@ -27,18 +29,24 @@ export function useMatriz() {
       { data: colsData },
       { data: deptData },
       { data: matrizColsData },
+      { data: tablaProductosData },
+      { data: visibilityData },
     ] = await Promise.all([
       supabase.from('clients').select('*').eq('is_active', true).order('brand_name'),
       supabase.from('tasks').select(TASK_SELECT).not('cliente_id', 'is', null).order('updated_at', { ascending: false }),
       supabase.from('kanban_columns').select('*').order('position'),
       supabase.from('departments').select('*').order('position'),
       supabase.from('columnas_matriz').select('*').order('position'),
+      supabase.from('matriz_tabla_productos').select('*'),
+      supabase.from('matriz_client_visibility').select('*').order('mes', { ascending: true }).order('created_at', { ascending: true }),
     ])
     setClients(clientsData || [])
     setTasks(tasksData || [])
     setAllColumns(colsData || [])
     setDepartments(deptData || [])
     setMatrizColumns(matrizColsData || [])
+    setTablaProductos(tablaProductosData || [])
+    setClientVisibility(visibilityData || [])
     setLoading(false)
   }, [])
 
@@ -52,6 +60,8 @@ export function useMatriz() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'kanban_columns' }, fetchAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'columnas_matriz' }, fetchAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'historial_matriz' }, fetchAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matriz_tabla_productos' }, fetchAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matriz_client_visibility' }, fetchAll)
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [fetchAll])
@@ -65,6 +75,21 @@ export function useMatriz() {
 
   function clientsByPeriod(period) {
     return clients.filter(c => c.billing_period === period)
+  }
+
+  // ── Pausar/reactivar un cliente en la Matriz, por mes, sin borrar historial ──
+  function isClientActiveInMonth(clientId, mes) {
+    const entries = clientVisibility.filter(v => v.cliente_id === clientId && v.mes <= mes)
+    if (entries.length === 0) return true // sin registro -> activo por defecto
+    const latest = entries[entries.length - 1] // vienen ordenadas por mes asc desde fetchAll
+    return latest.active
+  }
+
+  async function setClientActiveFrom(clientId, mes, active) {
+    setClientVisibility(prev => [...prev, { cliente_id: clientId, mes, active }])
+    const { error } = await supabase.from('matriz_client_visibility').insert({ cliente_id: clientId, mes, active })
+    if (error) fetchAll()
+    return { error }
   }
 
   function columnsForDept(departmentId) {
@@ -90,14 +115,28 @@ export function useMatriz() {
     return { error }
   }
 
-  // ── Checkbox "Tabla de productos" por cliente ────────────────────────────
-  async function toggleTablaProductos(clientId) {
-    setClients(prev => prev.map(c => c.id === clientId ? { ...c, tabla_productos: !c.tabla_productos } : c))
-    const { data, error } = await supabase.rpc('toggle_tabla_productos', { p_client_id: clientId })
+  // ── Checkbox "Tabla de productos" por cliente Y por mes ──────────────────
+  function tablaProductosChecked(clientId, mes) {
+    return !!tablaProductos.find(t => t.cliente_id === clientId && t.mes === mes)?.checked
+  }
+
+  async function toggleTablaProductos(clientId, mes) {
+    setTablaProductos(prev => {
+      const exists = prev.some(t => t.cliente_id === clientId && t.mes === mes)
+      return exists
+        ? prev.map(t => (t.cliente_id === clientId && t.mes === mes ? { ...t, checked: !t.checked } : t))
+        : [...prev, { cliente_id: clientId, mes, checked: true }]
+    })
+    const { data, error } = await supabase.rpc('toggle_tabla_productos_mes', { p_client_id: clientId, p_mes: mes })
     if (error) {
       fetchAll()
     } else {
-      setClients(prev => prev.map(c => c.id === clientId ? { ...c, tabla_productos: data } : c))
+      setTablaProductos(prev => {
+        const exists = prev.some(t => t.cliente_id === clientId && t.mes === mes)
+        return exists
+          ? prev.map(t => (t.cliente_id === clientId && t.mes === mes ? { ...t, checked: data } : t))
+          : [...prev, { cliente_id: clientId, mes, checked: data }]
+      })
     }
     return { data, error }
   }
@@ -160,6 +199,9 @@ export function useMatriz() {
     approveTask,
     deleteTask,
     toggleTablaProductos,
+    tablaProductosChecked,
+    isClientActiveInMonth,
+    setClientActiveFrom,
     saveMatrizColumn,
     deleteMatrizColumn,
     generarProximoMes,

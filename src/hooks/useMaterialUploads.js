@@ -26,12 +26,13 @@ export function useMaterialUploads() {
     return () => supabase.removeChannel(channel)
   }, [fetchItems])
 
-  async function createItem({ client_name, videographer_ids, date, time_start }) {
+  async function createItem({ client_name, videographer_ids, date, time_start, time_end }) {
     const { error } = await supabase.from('material_uploads').insert({
       client_name: client_name.trim(),
       videographer_ids,
       date,
       time_start: time_start || null,
+      time_end: time_end || null,
       status: 'no_subido',
       created_by: profile?.id || null,
     })

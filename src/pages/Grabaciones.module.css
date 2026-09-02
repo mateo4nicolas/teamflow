@@ -110,6 +110,14 @@
 
 .notesBlock { display: flex; flex-direction: column; gap: 4px; }
 .notesLabel { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; font-weight: 600; }
+.recordingLink { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--accent); text-decoration: none; padding: 6px 0; word-break: break-all; }
+.recordingLink:hover { text-decoration: underline; }
+.recordingLinksBlock { display: flex; flex-direction: column; }
+.link { flex: 1; min-width: 0; font-size: 12.5px; color: var(--accent); text-decoration: none; word-break: break-all; }
+.link:hover { text-decoration: underline; }
+.addLinkRow { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+.linkInput { flex: 1; min-width: 0; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 10px; font-size: 13px; color: var(--text-primary); outline: none; }
+.linkInput:focus { border-color: var(--accent); }
 .notesText { font-size: 13px; color: var(--text-secondary); line-height: 1.5; white-space: pre-wrap; }
 .notesEmpty { font-size: 12.5px; color: var(--text-muted); font-style: italic; }
 

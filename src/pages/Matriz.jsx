@@ -41,6 +41,9 @@ export default function MatrizPage() {
     approveTask,
     deleteTask,
     toggleTablaProductos,
+    tablaProductosChecked,
+    isClientActiveInMonth,
+    setClientActiveFrom,
     saveMatrizColumn,
     deleteMatrizColumn,
     generarProximoMes,
@@ -51,8 +54,18 @@ export default function MatrizPage() {
   const [showColSettings, setShowColSettings] = useState(false)
   const [mesAno, setMesAno] = useState(currentMesBase())
   const [generatingId, setGeneratingId] = useState(null)
+  const [showClientPicker, setShowClientPicker] = useState(false)
+  const [togglingId, setTogglingId] = useState(null)
 
-  const rows = clientsByPeriod(period)
+  const allRows = clientsByPeriod(period)
+  const rows = allRows.filter(c => isClientActiveInMonth(c.id, mesAno))
+
+  async function handleToggleClientInMonth(client, active) {
+    setTogglingId(client.id)
+    const { error } = await setClientActiveFrom(client.id, mesAno, active)
+    setTogglingId(null)
+    if (error) alert('No se pudo actualizar: ' + (error.message || 'error desconocido'))
+  }
 
   async function handleGenerarProximoMes(client) {
     const cicloActual = cycleLabel(mesAno, period)
@@ -91,6 +104,11 @@ export default function MatrizPage() {
           {isAdmin && (
             <button className="btn btn-ghost" onClick={() => setShowColSettings(true)}>
               <SettingsIcon /> Columnas
+            </button>
+          )}
+          {isAdmin && (
+            <button className="btn btn-ghost" onClick={() => setShowClientPicker(true)}>
+              <UsersIcon /> Gestionar clientes del mes
             </button>
           )}
         </div>
@@ -141,8 +159,8 @@ export default function MatrizPage() {
                       <input
                         type="checkbox"
                         className={styles.checkboxSquare}
-                        checked={!!client.tabla_productos}
-                        onChange={() => toggleTablaProductos(client.id)}
+                        checked={tablaProductosChecked(client.id, mesAno)}
+                        onChange={() => toggleTablaProductos(client.id, mesAno)}
                         title="Tabla de productos"
                       />
                     </div>
@@ -199,6 +217,17 @@ export default function MatrizPage() {
           onSave={saveMatrizColumn}
           onDelete={deleteMatrizColumn}
           onClose={() => setShowColSettings(false)}
+        />
+      )}
+
+      {isAdmin && showClientPicker && (
+        <ClientPickerModal
+          clients={allRows}
+          mesLabel={cycleLabel(mesAno, period)}
+          isActive={(clientId) => isClientActiveInMonth(clientId, mesAno)}
+          togglingId={togglingId}
+          onToggle={handleToggleClientInMonth}
+          onClose={() => setShowClientPicker(false)}
         />
       )}
     </div>
@@ -345,7 +374,48 @@ function ColumnasMatrizModal({ columns, departments, onSave, onDelete, onClose }
   )
 }
 
+// ── Elegir qué clientes se ven en la matriz este mes (sin tocar meses anteriores) ──
+function ClientPickerModal({ clients, mesLabel, isActive, togglingId, onToggle, onClose }) {
+  return (
+    <div className={styles.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className={styles.modal}>
+        <div className={styles.modalHeader}>
+          <h2>Clientes en {mesLabel}</h2>
+          <button className={styles.closeBtn} onClick={onClose}><CloseIcon /></button>
+        </div>
+        <div className={styles.modalForm}>
+          <p className={styles.hint}>
+            Desmarca un cliente para que no aparezca en la matriz desde este mes en adelante.
+            Los meses anteriores no se ven afectados, y puedes volver a marcarlo cuando quieras.
+          </p>
+          <div className={styles.clientPickerList}>
+            {clients.map(client => {
+              const active = isActive(client.id)
+              return (
+                <label key={client.id} className={styles.clientPickerRow}>
+                  <input
+                    type="checkbox"
+                    className={styles.checkboxSquare}
+                    checked={active}
+                    disabled={togglingId === client.id}
+                    onChange={() => onToggle(client, !active)}
+                  />
+                  <span className={active ? '' : styles.clientPickerNameOff}>{client.brand_name}</span>
+                </label>
+              )
+            })}
+          </div>
+        </div>
+        <div className={styles.modalFooter}>
+          <button className="btn btn-ghost" onClick={onClose}>Cerrar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SettingsIcon() { return <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg> }
+function UsersIcon()    { return <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="6" cy="5.5" r="2.3" stroke="currentColor" strokeWidth="1.3"/><path d="M1.8 14c.4-2.6 2.2-4 4.2-4s3.8 1.4 4.2 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/><circle cx="11.3" cy="5.8" r="1.8" stroke="currentColor" strokeWidth="1.2"/><path d="M10.8 10.3c1.7.2 3 1.4 3.4 3.7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg> }
 function ChevronLeftIcon()  { return <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg> }
 function ChevronRightIcon() { return <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg> }
 function CloseIcon()    { return <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg> }

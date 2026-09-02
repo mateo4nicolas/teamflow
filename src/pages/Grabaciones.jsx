@@ -350,6 +350,14 @@ function RecordingCard({ item, isAdmin, canEditNotes, onEditAdmin, onEditNotes, 
           </div>
         )}
 
+        {(item.links || []).length > 0 && (
+          <div className={styles.recordingLinksBlock}>
+            {item.links.map((l, i) => (
+              <a key={i} className={styles.recordingLink} href={l} target="_blank" rel="noreferrer">🔗 {l}</a>
+            ))}
+          </div>
+        )}
+
         <div className={styles.divider} />
 
         <div className={styles.userNotesBlock}>
@@ -389,10 +397,23 @@ function RecordingFormModal({ allProfiles, initial, onClose, onSave }) {
   const [modelName, setModelName] = useState(initial?.model_name || '')
   const [modelPhone, setModelPhone] = useState(initial?.model_phone || '')
   const [adminNotes, setAdminNotes] = useState(initial?.admin_notes || '')
+  const [links, setLinks] = useState(initial?.links || [])
+  const [newLink, setNewLink] = useState('')
   const [saving, setSaving] = useState(false)
 
   function toggleAssignee(id) {
     setAssignedTo(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  function addLink() {
+    if (!newLink.trim()) return
+    const url = newLink.startsWith('http') ? newLink : 'https://' + newLink
+    setLinks(prev => [...prev, url])
+    setNewLink('')
+  }
+
+  function removeLink(i) {
+    setLinks(prev => prev.filter((_, idx) => idx !== i))
   }
 
   async function handleSave() {
@@ -406,6 +427,7 @@ function RecordingFormModal({ allProfiles, initial, onClose, onSave }) {
         model_name: modelName.trim() || null,
         model_phone: modelPhone.trim() || null,
         admin_notes: adminNotes.trim() || null,
+        links,
       })
       if (error) alert('No se pudo guardar: ' + (error.message || 'error desconocido'))
     } catch (err) {
@@ -470,6 +492,20 @@ function RecordingFormModal({ allProfiles, initial, onClose, onSave }) {
           <div>
             <label className={styles.label}>Observaciones</label>
             <textarea className={styles.textarea} rows={3} value={adminNotes} onChange={e => setAdminNotes(e.target.value)} placeholder="Detalles adicionales para el videógrafo" />
+          </div>
+
+          <div>
+            <label className={styles.label}>Links</label>
+            {links.map((l, i) => (
+              <div key={i} className={styles.linkRow}>
+                <a href={l} target="_blank" rel="noopener noreferrer" className={styles.link}>{l}</a>
+                <button className={styles.removeLinkBtn} onClick={() => removeLink(i)}>✕</button>
+              </div>
+            ))}
+            <div className={styles.addLinkRow}>
+              <input className={styles.linkInput} placeholder="https://..." value={newLink} onChange={e => setNewLink(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addLink())} />
+              <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 12 }} onClick={addLink}>+ Añadir</button>
+            </div>
           </div>
 
           <button className="btn btn-primary" style={{ justifyContent: 'center', marginTop: 4 }} onClick={handleSave} disabled={saving}>
@@ -711,7 +747,11 @@ function MaterialCard({ item, allProfiles, isAdmin, canEditStatus, onSetStatus, 
     <div className={styles.materialCard}>
       <div className={styles.materialCardHeader}>
         <div className={styles.materialCardClient}>{item.client_name}</div>
-        {item.time_start && <span className={styles.materialCardTime}>{item.time_start.slice(0, 5)}</span>}
+        {item.time_start && (
+          <span className={styles.materialCardTime}>
+            {item.time_start.slice(0, 5)}{item.time_end ? ` – ${item.time_end.slice(0, 5)}` : ''}
+          </span>
+        )}
       </div>
       <div className={styles.materialCardVideographers}>{videographerNames}</div>
       <div className={styles.materialCardFooter}>
@@ -744,6 +784,7 @@ function MaterialFormModal({ allProfiles, defaultDate, onClose, onSave }) {
   const [videographerIds, setVideographerIds] = useState([])
   const [date, setDate] = useState(defaultDate || '')
   const [timeStart, setTimeStart] = useState('')
+  const [timeEnd, setTimeEnd] = useState('')
   const [saving, setSaving] = useState(false)
 
   function toggleVideographer(id) {
@@ -755,7 +796,7 @@ function MaterialFormModal({ allProfiles, defaultDate, onClose, onSave }) {
     if (!date) { alert('Selecciona una fecha'); return }
     setSaving(true)
     try {
-      const { error } = await onSave({ client_name: clientName, videographer_ids: videographerIds, date, time_start: timeStart || null })
+      const { error } = await onSave({ client_name: clientName, videographer_ids: videographerIds, date, time_start: timeStart || null, time_end: timeEnd || null })
       if (error) alert('No se pudo guardar: ' + (error.message || 'error desconocido'))
     } catch (err) {
       alert('No se pudo guardar: ' + (err?.message || 'error desconocido'))
@@ -776,14 +817,18 @@ function MaterialFormModal({ allProfiles, defaultDate, onClose, onSave }) {
             <label className={styles.label}>Cliente</label>
             <input className={styles.input} value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Nombre del cliente" autoFocus />
           </div>
+          <div>
+            <label className={styles.label}>Fecha</label>
+            <input type="date" className={styles.input} value={date} onChange={e => setDate(e.target.value)} />
+          </div>
           <div className={styles.formRow}>
             <div style={{ flex: 1 }}>
-              <label className={styles.label}>Fecha</label>
-              <input type="date" className={styles.input} value={date} onChange={e => setDate(e.target.value)} />
+              <label className={styles.label}>Hora inicio (opcional)</label>
+              <input type="time" className={styles.input} value={timeStart} onChange={e => setTimeStart(e.target.value)} />
             </div>
             <div style={{ flex: 1 }}>
-              <label className={styles.label}>Hora (opcional)</label>
-              <input type="time" className={styles.input} value={timeStart} onChange={e => setTimeStart(e.target.value)} />
+              <label className={styles.label}>Hora fin (opcional)</label>
+              <input type="time" className={styles.input} value={timeEnd} onChange={e => setTimeEnd(e.target.value)} />
             </div>
           </div>
           <div>

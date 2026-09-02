@@ -1,61 +1,16 @@
-import { useState, useEffect } from 'react'
-import { useAuth } from '../context/AuthContext'
+import { useState } from 'react'
 import { useTheme } from '../context/ThemeContext'
 import { usePushNotifications, isIOSDevice, isStandalonePWA, pushSupported } from '../hooks/usePushNotifications'
-import { supabase } from '../lib/supabase'
 import styles from './Configuracion.module.css'
 
-const ROLE_LABEL = { admin: 'Supervisor', user: 'Usuario' }
-
 export default function ConfiguracionPage() {
-  const { user, profile, isSuperAdmin } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const {
     eligible, permission, subscribing, subscribed, checkingSub,
     subscribe, unsubscribe, testPush,
   } = usePushNotifications()
 
-  const [departments, setDepartments] = useState([])
-  const [newPassword, setNewPassword] = useState('')
-  const [repeatPassword, setRepeatPassword] = useState('')
-  const [savingPassword, setSavingPassword] = useState(false)
-  const [passwordMsg, setPasswordMsg] = useState(null) // { type: 'ok' | 'error', text }
   const [pushMsg, setPushMsg] = useState(null)
-
-  useEffect(() => {
-    let cancelled = false
-    async function loadDepartments() {
-      if (!profile) return
-      const { data } = await supabase.from('departments').select('id, name')
-      if (!cancelled) setDepartments(data || [])
-    }
-    loadDepartments()
-    return () => { cancelled = true }
-  }, [profile])
-
-  const roleLabel = isSuperAdmin ? 'Admin' : ROLE_LABEL[profile?.role] || profile?.role
-
-  async function handleChangePassword() {
-    setPasswordMsg(null)
-    if (newPassword.length < 10) {
-      setPasswordMsg({ type: 'error', text: 'La contraseña debe tener al menos 10 caracteres.' })
-      return
-    }
-    if (newPassword !== repeatPassword) {
-      setPasswordMsg({ type: 'error', text: 'Las contraseñas no coinciden.' })
-      return
-    }
-    setSavingPassword(true)
-    const { error } = await supabase.auth.updateUser({ password: newPassword })
-    setSavingPassword(false)
-    if (error) {
-      setPasswordMsg({ type: 'error', text: error.message || 'No se pudo cambiar la contraseña.' })
-    } else {
-      setPasswordMsg({ type: 'ok', text: 'Contraseña actualizada.' })
-      setNewPassword('')
-      setRepeatPassword('')
-    }
-  }
 
   async function handleActivar() {
     setPushMsg(null)
@@ -80,10 +35,12 @@ export default function ConfiguracionPage() {
   const iOS = isIOSDevice()
   const standalone = isStandalonePWA()
   const supported = pushSupported()
+  const showControls = eligible && supported && !(iOS && !standalone)
 
   let statusLabel = 'Sin activar'
   let statusClass = styles.statusOff
-  if (checkingSub) { statusLabel = 'Verificando...'; statusClass = styles.statusChecking }
+  if (!eligible) { statusLabel = 'No aplica'; statusClass = styles.statusChecking }
+  else if (checkingSub) { statusLabel = 'Verificando...'; statusClass = styles.statusChecking }
   else if (subscribed && permission === 'granted') { statusLabel = 'Activado'; statusClass = styles.statusOn }
   else if (permission === 'denied') { statusLabel = 'Bloqueado en el navegador'; statusClass = styles.statusOff }
 
@@ -91,58 +48,6 @@ export default function ConfiguracionPage() {
     <div className={styles.page}>
       <h1 className={styles.pageTitle}>Configuración</h1>
       <p className={styles.pageSubtitle}>Todo lo tuyo en un solo sitio.</p>
-
-      {/* Mi cuenta */}
-      <section className={styles.card}>
-        <h2 className={styles.cardTitle}>Mi cuenta</h2>
-        <div className={styles.infoGrid}>
-          <div>
-            <span className={styles.infoLabel}>Nombre</span>
-            <span className={styles.infoValue}>{profile?.display_name || profile?.full_name || '—'}</span>
-          </div>
-          <div>
-            <span className={styles.infoLabel}>Correo</span>
-            <span className={styles.infoValue}>{user?.email || '—'}</span>
-          </div>
-          <div>
-            <span className={styles.infoLabel}>Perfil</span>
-            <span className={styles.infoValue}>{roleLabel || '—'}</span>
-          </div>
-          <div>
-            <span className={styles.infoLabel}>Departamento</span>
-            <span className={styles.infoValue}>
-              {departments.find(d => d.id === profile?.department_id)?.name || 'Sin asignar'}
-            </span>
-          </div>
-        </div>
-
-        <div className={styles.divider} />
-
-        <h3 className={styles.subTitle}>Cambiar mi contraseña</h3>
-        <p className={styles.hint}>Mínimo 10 caracteres. Al cambiarla seguirás con la sesión abierta aquí.</p>
-        <div className={styles.passwordRow}>
-          <input
-            type="password"
-            className={styles.input}
-            placeholder="Contraseña nueva"
-            value={newPassword}
-            onChange={e => setNewPassword(e.target.value)}
-          />
-          <input
-            type="password"
-            className={styles.input}
-            placeholder="Repetirla"
-            value={repeatPassword}
-            onChange={e => setRepeatPassword(e.target.value)}
-          />
-          <button className="btn btn-primary" onClick={handleChangePassword} disabled={savingPassword}>
-            {savingPassword ? 'Guardando...' : 'Guardar'}
-          </button>
-        </div>
-        {passwordMsg && (
-          <p className={passwordMsg.type === 'ok' ? styles.msgOk : styles.msgError}>{passwordMsg.text}</p>
-        )}
-      </section>
 
       {/* Apariencia */}
       <section className={styles.card}>
@@ -175,7 +80,7 @@ export default function ConfiguracionPage() {
           <span className={`${styles.statusBadge} ${statusClass}`}>{statusLabel}</span>
         </div>
 
-        {eligible && supported && !(iOS && !standalone) && (
+        {showControls && (
           <>
             <div className={styles.btnRow}>
               <button className="btn btn-primary" onClick={handleActivar} disabled={subscribing || subscribed}>

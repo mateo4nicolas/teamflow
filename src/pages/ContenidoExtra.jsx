@@ -1,9 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { useAuth } from '../context/AuthContext'
 import {
   useContenidoExtra, currentMesKey,
   FORMATO_OPTS, SOLICITA_OPTS, APROBACION_OPTS, DISENADO_OPTS,
   PUBLICACION_OPTS, PRESUPUESTO_OPTS, PAUTA_OPTS,
 } from '../hooks/useContenidoExtra'
+import { useContenidoExtraHeaders, HEADER_GROUPS } from '../hooks/useContenidoExtraHeaders'
 import styles from './ContenidoExtra.module.css'
 
 function textColorFor(bgHex) {
@@ -94,11 +96,14 @@ function CheckCell({ checked, onChange }) {
 }
 
 export default function ContenidoExtraPage() {
+  const { isAdmin } = useAuth()
   const { rows, meses, loading, addRow, updateRow, deleteRow, deleteMes, generarNuevoMes } = useContenidoExtra()
+  const { labelFor, saveHeaders } = useContenidoExtraHeaders()
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const [confirmDeleteMes, setConfirmDeleteMes] = useState(null)
   const [activeMes, setActiveMes] = useState(currentMesKey())
   const [generating, setGenerating] = useState(false)
+  const [showEditHeaders, setShowEditHeaders] = useState(false)
 
   // Cuando cargan los meses, si el mes activo (actual) todavía no existe como
   // fila en `meses`, igual se muestra: la tabla filtra por fila, no requiere
@@ -147,6 +152,11 @@ export default function ContenidoExtraPage() {
           <p className={styles.pageSubtitle}>Arte y publicaciones extra fuera del cronograma regular</p>
         </div>
         <button className="btn btn-primary" onClick={() => addRow(activeMes)}>+ Nueva fila</button>
+        {isAdmin && (
+          <button className={styles.editHeadersBtn} onClick={() => setShowEditHeaders(true)}>
+            ✏️ Editar títulos
+          </button>
+        )}
       </div>
 
       <div className={styles.monthTabs}>
@@ -176,33 +186,33 @@ export default function ContenidoExtraPage() {
         <table className={styles.table}>
           <thead>
             <tr>
-              <th className={styles.groupHeader} colSpan={3}>ARTE EXTRA</th>
+              <th className={styles.groupHeader} colSpan={3}>{labelFor('group_arte_extra')}</th>
               <th className={styles.groupHeader}></th>
-              <th className={styles.groupHeader} colSpan={4}>PLANIFICACIÓN</th>
-              <th className={styles.groupHeader} colSpan={2}>DISEÑO</th>
-              <th className={styles.groupHeader} colSpan={3}>PUBLICACIÓN</th>
-              <th className={styles.groupHeader} colSpan={3}>PAUTA</th>
+              <th className={styles.groupHeader} colSpan={4}>{labelFor('group_planificacion')}</th>
+              <th className={styles.groupHeader} colSpan={2}>{labelFor('group_diseno')}</th>
+              <th className={styles.groupHeader} colSpan={3}>{labelFor('group_publicacion')}</th>
+              <th className={styles.groupHeader} colSpan={3}>{labelFor('group_pauta')}</th>
               <th className={styles.groupHeader}></th>
             </tr>
             <tr>
-              <th className={styles.colHeader}>CLIENTE</th>
-              <th className={styles.colHeader}>FORMATO</th>
-              <th className={styles.colHeader}>SOLICITA</th>
-              <th className={styles.colHeader}>FECHA SOLICITUD</th>
-              <th className={styles.colHeader}>CÓDIGO</th>
-              <th className={styles.colHeader}>COPY DISEÑO</th>
-              <th className={styles.colHeader}>COPY RED SOCIAL</th>
-              <th className={styles.colHeader}>APROBACIÓN</th>
-              <th className={styles.colHeader}>FECHA ENTREGA</th>
-              <th className={styles.colHeader}>DISEÑADO</th>
-              <th className={styles.colHeader}>LINK</th>
-              <th className={styles.colHeader}>PUBLICACIÓN</th>
-              <th className={styles.colHeader}>✓</th>
-              <th className={styles.colHeader}>FECHA</th>
-              <th className={styles.colHeader}>PRESUPUESTO</th>
-              <th className={styles.colHeader}>DURACIÓN</th>
-              <th className={styles.colHeader}>PAUTA</th>
-              <th className={styles.colHeader}>✓</th>
+              <th className={styles.colHeader}>{labelFor('col_cliente')}</th>
+              <th className={styles.colHeader}>{labelFor('col_formato')}</th>
+              <th className={styles.colHeader}>{labelFor('col_solicita')}</th>
+              <th className={styles.colHeader}>{labelFor('col_fecha_solicitud')}</th>
+              <th className={styles.colHeader}>{labelFor('col_codigo')}</th>
+              <th className={styles.colHeader}>{labelFor('col_copy_diseno')}</th>
+              <th className={styles.colHeader}>{labelFor('col_copy_red_social')}</th>
+              <th className={styles.colHeader}>{labelFor('col_aprobacion')}</th>
+              <th className={styles.colHeader}>{labelFor('col_fecha_entrega')}</th>
+              <th className={styles.colHeader}>{labelFor('col_disenado')}</th>
+              <th className={styles.colHeader}>{labelFor('col_link')}</th>
+              <th className={styles.colHeader}>{labelFor('col_publicacion')}</th>
+              <th className={styles.colHeader}>{labelFor('col_publicacion_check')}</th>
+              <th className={styles.colHeader}>{labelFor('col_fecha_publicacion')}</th>
+              <th className={styles.colHeader}>{labelFor('col_presupuesto')}</th>
+              <th className={styles.colHeader}>{labelFor('col_duracion')}</th>
+              <th className={styles.colHeader}>{labelFor('col_pauta')}</th>
+              <th className={styles.colHeader}>{labelFor('col_pauta_check')}</th>
             </tr>
           </thead>
           <tbody>
@@ -249,6 +259,65 @@ export default function ContenidoExtraPage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {showEditHeaders && (
+        <EditHeadersModal labelFor={labelFor} onSave={saveHeaders} onClose={() => setShowEditHeaders(false)} />
+      )}
+    </div>
+  )
+}
+
+function EditHeadersModal({ labelFor, onSave, onClose }) {
+  const [draft, setDraft] = useState(() => {
+    const all = {}
+    for (const group of HEADER_GROUPS) for (const key of group.keys) all[key] = labelFor(key)
+    return all
+  })
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    setSaving(true)
+    const changes = {}
+    for (const group of HEADER_GROUPS) {
+      for (const key of group.keys) {
+        if (draft[key] !== labelFor(key)) changes[key] = draft[key]
+      }
+    }
+    const { error } = await onSave(changes)
+    setSaving(false)
+    if (error) alert('No se pudo guardar: ' + (error.message || 'error desconocido'))
+    else onClose()
+  }
+
+  return (
+    <div className={styles.overlay} onClick={onClose}>
+      <div className={styles.editHeadersModal} onClick={e => e.stopPropagation()}>
+        <div className={styles.modalHeader}>
+          <h2>Editar títulos de la tabla</h2>
+          <button className={styles.closeBtn} onClick={onClose}><CloseIcon /></button>
+        </div>
+        <div className={styles.modalForm}>
+          {HEADER_GROUPS.map(group => (
+            <div key={group.title}>
+              <p className={styles.headerGroupTitle}>{group.title}</p>
+              <div className={styles.headerFieldsGrid}>
+                {group.keys.map(key => (
+                  <input
+                    key={key}
+                    className={styles.cellInput}
+                    style={{ border: '1px solid var(--border)', padding: '7px 8px' }}
+                    value={draft[key]}
+                    onChange={e => setDraft(prev => ({ ...prev, [key]: e.target.value }))}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+          <button className="btn btn-primary" style={{ justifyContent: 'center' }} onClick={handleSave} disabled={saving}>
+            {saving ? 'Guardando...' : 'Guardar cambios'}
+          </button>
+        </div>
       </div>
     </div>
   )
